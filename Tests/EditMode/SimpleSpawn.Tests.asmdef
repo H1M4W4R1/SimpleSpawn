@@ -1,0 +1,25 @@
+{
+    "name": "SimpleSpawn.Tests",
+    "rootNamespace": "Systems.SimpleSpawn.Tests",
+    "references": [
+        "SimpleCore",
+        "SimpleSpawn",
+        "SimpleSpawn.TestComponents",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

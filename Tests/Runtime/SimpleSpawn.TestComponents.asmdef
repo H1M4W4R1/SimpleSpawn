@@ -1,0 +1,18 @@
+{
+    "name": "SimpleSpawn.TestComponents",
+    "rootNamespace": "Systems.SimpleSpawn.Tests",
+    "references": [
+        "SimpleSpawn"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
