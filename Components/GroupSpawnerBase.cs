@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Systems.SimpleCore.Operations;
 using Systems.SimpleSpawn.Abstract;
 using Systems.SimpleSpawn.Operations;
@@ -37,9 +38,11 @@ namespace Systems.SimpleSpawn.Components
         /// </summary>
         protected OperationResult TrySpawnGroupInternal(int groupSize)
         {
+            int initialSpawnedCount = SpawnedEntities.Count;
             OperationResult canSpawnResult = CanSpawnGroup(groupSize);
             if (!canSpawnResult)
             {
+                RollbackGroupSpawn(initialSpawnedCount);
                 OnGroupSpawnFailed(groupSize, canSpawnResult);
                 return canSpawnResult;
             }
@@ -49,6 +52,7 @@ namespace Systems.SimpleSpawn.Components
                 if (!TryGenerateNextGroupEntity(out ISpawnableEntity prefab))
                 {
                     OperationResult result = SpawnOperations.EntityNotGenerated();
+                    RollbackGroupSpawn(initialSpawnedCount);
                     OnGroupSpawnFailed(groupSize, result);
                     return result;
                 }
@@ -57,6 +61,7 @@ namespace Systems.SimpleSpawn.Components
                     prefab, transform.position, transform.rotation);
                 if (!spawnResult)
                 {
+                    RollbackGroupSpawn(initialSpawnedCount);
                     OnGroupSpawnFailed(groupSize, spawnResult);
                     return spawnResult;
                 }
@@ -73,5 +78,12 @@ namespace Systems.SimpleSpawn.Components
         protected virtual void OnGroupSpawned(int groupSize, in OperationResult result) { }
 
         protected virtual void OnGroupSpawnFailed(int groupSize, in OperationResult result) { }
+
+        private void RollbackGroupSpawn(int initialSpawnedCount)
+        {
+            IReadOnlyList<ISpawnableEntity> spawnedEntities = SpawnedEntities;
+            for (int i = spawnedEntities.Count - 1; i >= initialSpawnedCount; i--)
+                TryDespawn(spawnedEntities[i]);
+        }
     }
 }

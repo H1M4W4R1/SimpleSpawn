@@ -75,9 +75,15 @@ namespace Systems.SimpleSpawn.Components
             {
                 ISpawnableEntity entity = _spawnedEntities[i];
                 OperationResult result = SpawnAPI.TryDespawn(entity);
-                if (result) OnDespawned(entity, result);
-                else lastResult = result;
-                _spawnedEntities.RemoveAt(i);
+                if (result)
+                {
+                    OnDespawned(entity, result);
+                    _spawnedEntities.RemoveAt(i);
+                }
+                else
+                {
+                    lastResult = result;
+                }
             }
 
             return lastResult;
@@ -122,7 +128,11 @@ namespace Systems.SimpleSpawn.Components
         {
             OperationResult result = SpawnAPI.TrySpawn(
                 prefab, position, rotation, transform, out ISpawnableEntity spawnedEntity);
-            if (!result) return result;
+            if (!result)
+            {
+                OnSpawnFailed(result);
+                return result;
+            }
 
             _spawnedEntities.Add(spawnedEntity);
             OnSpawned(spawnedEntity, result);

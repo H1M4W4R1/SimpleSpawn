@@ -68,20 +68,44 @@ namespace Systems.SimpleSpawn.Abstract
         /// </summary>
         protected IReadOnlyList<TSpawnableEntity> Entities => _entities;
 
-        protected override bool CanSpawn(TSpawner currentSpawner) => _entities.Count > 0;
+        protected override bool CanSpawn(TSpawner currentSpawner)
+        {
+            for (int i = 0; i < _entities.Count; i++)
+            {
+                TSpawnableEntity entity = _entities[i];
+                Component component = entity as Component;
+                if (!ReferenceEquals(component, null) && component) return true;
+            }
+
+            return false;
+        }
 
         protected override bool TryGenerateNextEntity(
             TSpawner currentSpawner, out ISpawnableEntity entity)
         {
-            if (_entities.Count == 0)
+            int entityCount = _entities.Count;
+            if (entityCount == 0)
             {
                 entity = null;
                 return false;
             }
 
-            entity = _entities[Random.Range(0, _entities.Count)];
-            Component component = entity as Component;
-            return !ReferenceEquals(component, null) && component;
+            int startIndex = Random.Range(0, entityCount);
+            for (int offset = 0; offset < entityCount; offset++)
+            {
+                int index = startIndex + offset;
+                if (index >= entityCount) index -= entityCount;
+
+                TSpawnableEntity candidate = _entities[index];
+                Component component = candidate as Component;
+                if (ReferenceEquals(component, null) || !component) continue;
+
+                entity = candidate;
+                return true;
+            }
+
+            entity = null;
+            return false;
         }
     }
 }

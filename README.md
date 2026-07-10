@@ -52,9 +52,9 @@ public sealed class EnemySpawnList : SpawnListBase<EnemySpawner>
 }
 ```
 
-`SpawnerBase` calls `CanSpawn` and `TryGenerateNextEntity` with the current spawner. Every successful result is added to `SpawnedEntities`; destroyed entries are removed the next time the list is accessed. The API validates that the interface reference is also a Unity `Component` before instantiating it.
+`SpawnerBase` calls `CanSpawn` and `TryGenerateNextEntity` with the current spawner. Every successful result is added to `SpawnedEntities`; destroyed entries are removed the next time the list is accessed. The default spawn list skips missing or destroyed prefab references. The API validates that the interface reference is also a Unity `Component` before instantiating it.
 
-`GroupSpawnerBase.TrySpawnGroup` and `WaveSpawnerBase.TrySpawnWave` generate entities immediately. They do not start coroutines or wait between operations, so a derived component can choose a timer, tick system, animation callback, or another scheduling policy.
+`GroupSpawnerBase.TrySpawnGroup` and `WaveSpawnerBase.TrySpawnWave` generate entities immediately. They do not start coroutines or wait between operations, so a derived component can choose a timer, tick system, animation callback, or another scheduling policy. If generation or spawning fails, entities created during that group or wave are despawned before the failure callback runs. A despawn-control component that rejects rollback can leave an entity tracked and active.
 
 ## Calling the low-level API
 

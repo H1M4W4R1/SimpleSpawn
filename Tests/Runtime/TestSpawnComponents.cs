@@ -11,13 +11,4 @@ namespace Systems.SimpleSpawn.Tests
 
     public sealed class TestWaveSpawner : WaveSpawnerBase { }
 
-    public sealed class TestDespawnControl : DespawnControlBase
-    {
-        public bool WasDespawned;
-
-        protected override void OnDespawn()
-        {
-            WasDespawned = true;
-        }
-    }
 }

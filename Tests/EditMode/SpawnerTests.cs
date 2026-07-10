@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using Systems.SimpleCore.Operations;
 using Systems.SimpleSpawn.Operations;
+using Systems.SimpleSpawn.Data;
 using UnityEditor;
 using UnityEngine;
 
@@ -103,6 +104,106 @@ namespace Systems.SimpleSpawn.Tests
             spawner.DespawnAll();
             Object.DestroyImmediate(spawnerObject);
             Object.DestroyImmediate(prefabObject);
+            Object.DestroyImmediate(list);
+        }
+
+        [Test]
+        public void DespawnAll_WhenControlRejects_KeepsEntityTrackedForRetry()
+        {
+            GameObject prefabObject = new("SpawnPrefab");
+            TestSpawnableEntity prefab = prefabObject.AddComponent<TestSpawnableEntity>();
+            prefabObject.AddComponent<TestDespawnControl>().AllowDespawn = false;
+            TestSpawnList list = ScriptableObject.CreateInstance<TestSpawnList>();
+            list.Prefab = prefab;
+
+            GameObject spawnerObject = new("Spawner");
+            TestSpawner spawner = spawnerObject.AddComponent<TestSpawner>();
+            SerializedObject serializedSpawner = new(spawner);
+            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
+            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+
+            Assert.IsTrue(spawner.TrySpawn());
+
+            OperationResult despawnResult = spawner.DespawnAll();
+
+            Assert.IsFalse(despawnResult);
+            Assert.AreEqual(1, spawner.SpawnedEntities.Count);
+
+            Component spawnedComponent = spawner.SpawnedEntities[0] as Component;
+            TestDespawnControl spawnedControl = spawnedComponent.GetComponent<TestDespawnControl>();
+            spawnedControl.AllowDespawn = true;
+
+            OperationResult retryResult = spawner.DespawnAll();
+
+            Assert.IsTrue(retryResult);
+            Assert.AreEqual(0, spawner.SpawnedEntities.Count);
+
+            Object.DestroyImmediate(spawnerObject);
+            Object.DestroyImmediate(prefabObject);
+            Object.DestroyImmediate(list);
+        }
+
+        [Test]
+        public void TrySpawnGroup_WhenGenerationFails_RollsBackCreatedEntities()
+        {
+            GameObject prefabObject = new("SpawnPrefab");
+            TestSpawnableEntity prefab = prefabObject.AddComponent<TestSpawnableEntity>();
+            FailingGroupSpawnList list = ScriptableObject.CreateInstance<FailingGroupSpawnList>();
+            list.Prefab = prefab;
+            list.FailAfterCount = 1;
+
+            GameObject spawnerObject = new("GroupSpawner");
+            TestGroupSpawner spawner = spawnerObject.AddComponent<TestGroupSpawner>();
+            SerializedObject serializedSpawner = new(spawner);
+            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
+            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+
+            OperationResult result = spawner.TrySpawnGroup(2);
+
+            Assert.IsFalse(result);
+            Assert.AreEqual(0, spawner.SpawnedEntities.Count);
+
+            Object.DestroyImmediate(spawnerObject);
+            Object.DestroyImmediate(prefabObject);
+            Object.DestroyImmediate(list);
+        }
+
+        [Test]
+        public void TrySpawnGeneratedEntity_WhenPrefabIsInvalid_NotifiesFailure()
+        {
+            GameObject spawnerObject = new("Spawner");
+            CallbackTestSpawner spawner = spawnerObject.AddComponent<CallbackTestSpawner>();
+
+            OperationResult result = spawner.TrySpawnInvalidEntity();
+
+            Assert.IsFalse(result);
+            Assert.IsTrue(spawner.SpawnFailed);
+
+            Object.DestroyImmediate(spawnerObject);
+        }
+
+        [Test]
+        public void TrySpawn_WithOnlyInvalidListEntries_ReturnsNotPermitted()
+        {
+            SpawnList list = ScriptableObject.CreateInstance<SpawnList>();
+            SerializedObject serializedList = new(list);
+            SerializedProperty entities = serializedList.FindProperty("_entities");
+            entities.arraySize = 1;
+            entities.GetArrayElementAtIndex(0).objectReferenceValue = null;
+            serializedList.ApplyModifiedPropertiesWithoutUndo();
+
+            GameObject spawnerObject = new("Spawner");
+            TestSpawner spawner = spawnerObject.AddComponent<TestSpawner>();
+            SerializedObject serializedSpawner = new(spawner);
+            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
+            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+
+            OperationResult result = spawner.TrySpawn();
+
+            Assert.IsFalse(result);
+            Assert.AreEqual(SpawnOperations.ERROR_SPAWN_NOT_PERMITTED, result.resultCode);
+
+            Object.DestroyImmediate(spawnerObject);
             Object.DestroyImmediate(list);
         }
     }
