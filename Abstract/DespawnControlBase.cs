@@ -43,5 +43,6 @@ namespace Systems.SimpleSpawn.Abstract
         ///     Called when despawn validation fails.
         /// </summary>
         protected virtual void OnDespawnFailed(in OperationResult result) { }
+
     }
 }

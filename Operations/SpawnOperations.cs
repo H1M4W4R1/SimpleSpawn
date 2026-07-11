@@ -21,6 +21,7 @@ namespace Systems.SimpleSpawn.Operations
         public const ushort ERROR_INVALID_PREFAB = 4;
         public const ushort ERROR_ENTITY_ALREADY_DESPAWNED = 5;
         public const ushort ERROR_INVALID_SPAWN_COUNT = 6;
+        public const ushort ERROR_SPAWN_POSITION_NOT_GENERATED = 7;
 
         public static OperationResult Permitted()
             => OperationResult.Success(SYSTEM_SPAWN, OperationResult.SUCCESS_PERMITTED);
@@ -57,5 +58,8 @@ namespace Systems.SimpleSpawn.Operations
 
         public static OperationResult InvalidSpawnCount()
             => OperationResult.Error(SYSTEM_SPAWN, ERROR_INVALID_SPAWN_COUNT);
+
+        public static OperationResult SpawnPositionNotGenerated()
+            => OperationResult.Error(SYSTEM_SPAWN, ERROR_SPAWN_POSITION_NOT_GENERATED);
     }
 }

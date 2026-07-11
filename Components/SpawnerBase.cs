@@ -13,8 +13,24 @@ namespace Systems.SimpleSpawn.Components
     /// </summary>
     public abstract class SpawnerBase : MonoBehaviour
     {
-        [SerializeField] private SpawnListBase _spawnList;
+        protected Transform _transform;
         private readonly List<ISpawnableEntity> _spawnedEntities = new();
+
+        protected virtual void Awake()
+        {
+            _transform = transform;
+        }
+
+        protected Transform SpawnerTransform
+        {
+            get
+            {
+                if (ReferenceEquals(_transform, null) || !_transform)
+                    _transform = transform;
+
+                return _transform;
+            }
+        }
 
         /// <summary>
         ///     Current entities spawned by this component. Destroyed instances are removed on access.
@@ -29,15 +45,28 @@ namespace Systems.SimpleSpawn.Components
         }
 
         /// <summary>
-        ///     Spawns one entity at this component's transform.
+        ///     Spawns one entity at the generated spawn position and rotation.
         /// </summary>
-        public OperationResult TrySpawn()
-            => TrySpawn(transform.position, transform.rotation);
+        public OperationResult TrySpawnSingle()
+        {
+            RemoveDestroyedEntities();
+
+            OperationResult canSpawnResult = CanSpawnEntity();
+            if (!canSpawnResult) return CompleteSpawnFailure(canSpawnResult);
+
+            if (!TryGenerateNextEntity(out ISpawnableEntity prefab))
+                return CompleteSpawnFailure(SpawnOperations.EntityNotGenerated());
+
+            if (!TryGetSpawnPosition(out Vector3 position, out Quaternion rotation))
+                return CompleteSpawnFailure(SpawnOperations.SpawnPositionNotGenerated());
+
+            return TrySpawnGeneratedEntity(prefab, position, rotation);
+        }
 
         /// <summary>
         ///     Spawns one entity at the supplied transform values.
         /// </summary>
-        public OperationResult TrySpawn(Vector3 position, Quaternion rotation)
+        public OperationResult TrySpawnSingle(Vector3 position, Quaternion rotation)
         {
             RemoveDestroyedEntities();
 
@@ -48,6 +77,18 @@ namespace Systems.SimpleSpawn.Components
                 return CompleteSpawnFailure(SpawnOperations.EntityNotGenerated());
 
             return TrySpawnGeneratedEntity(prefab, position, rotation);
+        }
+
+        /// <summary>
+        ///     Generates the position and rotation used by the parameterless single and wave spawn operations.
+        /// </summary>
+        protected virtual bool TryGetSpawnPosition(
+            out Vector3 position, out Quaternion rotation)
+        {
+            Transform spawnerTransform = SpawnerTransform;
+            position = spawnerTransform.position;
+            rotation = spawnerTransform.rotation;
+            return true;
         }
 
         /// <summary>
@@ -90,33 +131,17 @@ namespace Systems.SimpleSpawn.Components
         }
 
         /// <summary>
-        ///     Checks whether the configured list can produce one entity.
+        ///     Checks whether this spawner can produce one entity.
         /// </summary>
         protected virtual OperationResult CanSpawnEntity()
         {
-            if (ReferenceEquals(_spawnList, null) || !_spawnList)
-                return SpawnOperations.SpawnListNotAssigned();
-
-            return _spawnList.CanSpawn(this)
-                ? SpawnOperations.Permitted()
-                : SpawnOperations.SpawnNotPermitted();
+            return SpawnOperations.Permitted();
         }
 
         /// <summary>
-        ///     Generates one prefab from the configured list.
+        ///     Generates one prefab for the next single spawn.
         /// </summary>
-        protected virtual bool TryGenerateNextEntity(out ISpawnableEntity entity)
-        {
-            if (ReferenceEquals(_spawnList, null) || !_spawnList)
-            {
-                entity = null;
-                return false;
-            }
-
-            if (!_spawnList.TryGenerateNextEntity(this, out entity)) return false;
-            Component component = entity as Component;
-            return !ReferenceEquals(component, null) && component;
-        }
+        protected abstract bool TryGenerateNextEntity(out ISpawnableEntity entity);
 
         /// <summary>
         ///     Instantiates a generated prefab and adds the instance to this spawner's list.
@@ -127,7 +152,7 @@ namespace Systems.SimpleSpawn.Components
             Quaternion rotation)
         {
             OperationResult result = SpawnAPI.TrySpawn(
-                prefab, position, rotation, transform, out ISpawnableEntity spawnedEntity);
+                prefab, position, rotation, SpawnerTransform, out ISpawnableEntity spawnedEntity);
             if (!result)
             {
                 OnSpawnFailed(result);
@@ -135,7 +160,7 @@ namespace Systems.SimpleSpawn.Components
             }
 
             _spawnedEntities.Add(spawnedEntity);
-            OnSpawned(spawnedEntity, result);
+            OnSpawned(spawnedEntity!, result);
             return result;
         }
 

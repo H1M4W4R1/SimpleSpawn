@@ -1,132 +1,89 @@
 using NUnit.Framework;
 using Systems.SimpleCore.Operations;
 using Systems.SimpleSpawn.Operations;
-using Systems.SimpleSpawn.Data;
-using UnityEditor;
 using UnityEngine;
 
 namespace Systems.SimpleSpawn.Tests
 {
-    public sealed class SpawnerTests
+    public sealed class SpawnerTests : SimpleSpawnTestBase
     {
         [Test]
-        public void TrySpawn_UsesTypedListAndTracksEntity()
+        public void TrySpawnSingle_UsesGeneratedPrefabTracksEntityAndParentsToSpawner()
         {
-            GameObject prefabObject = new("SpawnPrefab");
-            TestSpawnableEntity prefab = prefabObject.AddComponent<TestSpawnableEntity>();
-            TestSpawnList list = ScriptableObject.CreateInstance<TestSpawnList>();
-            list.Prefab = prefab;
+            TestSpawnableEntity prefab = CreatePrefab();
+            TestSpawner spawner = CreateSpawner();
+            spawner.Prefab = prefab;
 
-            GameObject spawnerObject = new("Spawner");
-            TestSpawner spawner = spawnerObject.AddComponent<TestSpawner>();
-            SerializedObject serializedSpawner = new(spawner);
-            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
-            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
-
-            OperationResult result = spawner.TrySpawn();
+            OperationResult result = spawner.TrySpawnSingle();
 
             Assert.IsTrue(result);
+            Assert.AreEqual(SpawnOperations.SUCCESS_SPAWNED, result.resultCode);
             Assert.AreEqual(1, spawner.SpawnedEntities.Count);
-            Assert.AreEqual(1, list.CanSpawnCallCount);
-            Assert.AreEqual(1, list.GenerateCallCount);
-            Assert.AreSame(spawner, list.CurrentSpawner);
-
-            OperationResult despawnResult = spawner.DespawnAll();
-            Assert.IsTrue(despawnResult);
-            Assert.AreEqual(SpawnOperations.SUCCESS_ALL_DESPAWNED, despawnResult.resultCode);
-            Assert.AreEqual(0, spawner.SpawnedEntities.Count);
-
-            Object.DestroyImmediate(spawnerObject);
-            Object.DestroyImmediate(prefabObject);
-            Object.DestroyImmediate(list);
+            Assert.AreEqual(1, spawner.GenerateCallCount);
+            Assert.AreEqual(1, spawner.SpawnedCount);
+            Component spawnedComponent = spawner.SpawnedEntities[0] as Component;
+            Assert.AreEqual(spawner.transform, spawnedComponent.transform.parent);
+            Assert.AreEqual(spawner.SpawnPosition, spawnedComponent.transform.position);
         }
 
         [Test]
-        public void TrySpawn_WithoutList_ReturnsConfigurationError()
+        public void TrySpawn_WhenGenerationFails_NotifiesFailure()
         {
-            GameObject spawnerObject = new("Spawner");
-            TestSpawner spawner = spawnerObject.AddComponent<TestSpawner>();
+            TestSpawner spawner = CreateSpawner();
+            spawner.AllowGeneration = false;
 
-            OperationResult result = spawner.TrySpawn();
+            OperationResult result = spawner.TrySpawnSingle(Vector3.zero, Quaternion.identity);
 
             Assert.IsFalse(result);
-            Assert.AreEqual(SpawnOperations.ERROR_SPAWN_LIST_NOT_ASSIGNED, result.resultCode);
-
-            Object.DestroyImmediate(spawnerObject);
+            Assert.AreEqual(SpawnOperations.ERROR_ENTITY_NOT_GENERATED, result.resultCode);
+            Assert.AreEqual(1, spawner.GenerateCallCount);
+            Assert.AreEqual(1, spawner.SpawnFailedCount);
+            Assert.AreEqual(0, spawner.SpawnedEntities.Count);
         }
 
         [Test]
-        public void TrySpawnGroup_GeneratesAndTracksWholeGroup()
+        public void TrySpawn_WhenGeneratedPrefabIsInvalid_ReturnsInvalidPrefabAndNotifiesFailure()
         {
-            GameObject prefabObject = new("SpawnPrefab");
-            TestSpawnableEntity prefab = prefabObject.AddComponent<TestSpawnableEntity>();
-            TestGroupSpawnList list = ScriptableObject.CreateInstance<TestGroupSpawnList>();
-            list.Prefab = prefab;
+            GameObject spawnerObject = Track(new GameObject("InvalidPrefabSpawner"));
+            InvalidPrefabSpawner spawner = spawnerObject.AddComponent<InvalidPrefabSpawner>();
+            spawner.Prefab = new TestNonComponentEntity();
 
-            GameObject spawnerObject = new("GroupSpawner");
-            TestGroupSpawner spawner = spawnerObject.AddComponent<TestGroupSpawner>();
-            SerializedObject serializedSpawner = new(spawner);
-            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
-            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+            OperationResult result = spawner.TrySpawnSingle(Vector3.zero, Quaternion.identity);
 
-            OperationResult result = spawner.TrySpawnGroup(2);
-
-            Assert.IsTrue(result);
-            Assert.AreEqual(SpawnOperations.SUCCESS_GROUP_SPAWNED, result.resultCode);
-            Assert.AreEqual(2, spawner.SpawnedEntities.Count);
-
-            spawner.DespawnAll();
-            Object.DestroyImmediate(spawnerObject);
-            Object.DestroyImmediate(prefabObject);
-            Object.DestroyImmediate(list);
+            Assert.IsFalse(result);
+            Assert.AreEqual(SpawnOperations.ERROR_INVALID_PREFAB, result.resultCode);
+            Assert.AreEqual(1, spawner.SpawnFailedCount);
+            Assert.AreEqual(0, spawner.SpawnedEntities.Count);
         }
 
         [Test]
-        public void TrySpawnWave_UsesGroupGenerationWithoutScheduling()
+        public void SpawnedEntities_RemovesDestroyedInstancesWhenAccessed()
         {
-            GameObject prefabObject = new("SpawnPrefab");
-            TestSpawnableEntity prefab = prefabObject.AddComponent<TestSpawnableEntity>();
-            TestWaveSpawnList list = ScriptableObject.CreateInstance<TestWaveSpawnList>();
-            list.Prefab = prefab;
+            TestSpawnableEntity prefab = CreatePrefab();
+            TestSpawner spawner = CreateSpawner();
+            spawner.Prefab = prefab;
+            Assert.IsTrue(spawner.TrySpawnSingle());
 
-            GameObject spawnerObject = new("WaveSpawner");
-            TestWaveSpawner spawner = spawnerObject.AddComponent<TestWaveSpawner>();
-            SerializedObject serializedSpawner = new(spawner);
-            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
-            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+            Component spawnedComponent = spawner.SpawnedEntities[0] as Component;
+            Object.DestroyImmediate(spawnedComponent.gameObject);
 
-            OperationResult result = spawner.TrySpawnWave(3);
-
-            Assert.IsTrue(result);
-            Assert.AreEqual(SpawnOperations.SUCCESS_WAVE_SPAWNED, result.resultCode);
-            Assert.AreEqual(3, spawner.SpawnedEntities.Count);
-
-            spawner.DespawnAll();
-            Object.DestroyImmediate(spawnerObject);
-            Object.DestroyImmediate(prefabObject);
-            Object.DestroyImmediate(list);
+            Assert.AreEqual(0, spawner.SpawnedEntities.Count);
         }
 
         [Test]
-        public void DespawnAll_WhenControlRejects_KeepsEntityTrackedForRetry()
+        public void DespawnAll_WhenOneEntityRejects_KeepsItTrackedAndCanRetry()
         {
-            GameObject prefabObject = new("SpawnPrefab");
-            TestSpawnableEntity prefab = prefabObject.AddComponent<TestSpawnableEntity>();
-            prefabObject.AddComponent<TestDespawnControl>().AllowDespawn = false;
-            TestSpawnList list = ScriptableObject.CreateInstance<TestSpawnList>();
-            list.Prefab = prefab;
+            TestSpawnableEntity prefab = CreatePrefab();
+            TestDespawnControl prefabControl = prefab.gameObject.AddComponent<TestDespawnControl>();
+            prefabControl.AllowDespawn = false;
+            TestSpawner spawner = CreateSpawner();
+            spawner.Prefab = prefab;
+            Assert.IsTrue(spawner.TrySpawnSingle());
 
-            GameObject spawnerObject = new("Spawner");
-            TestSpawner spawner = spawnerObject.AddComponent<TestSpawner>();
-            SerializedObject serializedSpawner = new(spawner);
-            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
-            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+            OperationResult result = spawner.DespawnAll();
 
-            Assert.IsTrue(spawner.TrySpawn());
-
-            OperationResult despawnResult = spawner.DespawnAll();
-
-            Assert.IsFalse(despawnResult);
+            Assert.IsFalse(result);
+            Assert.AreEqual(SpawnOperations.ERROR_SPAWN_NOT_PERMITTED, result.resultCode);
             Assert.AreEqual(1, spawner.SpawnedEntities.Count);
 
             Component spawnedComponent = spawner.SpawnedEntities[0] as Component;
@@ -136,75 +93,87 @@ namespace Systems.SimpleSpawn.Tests
             OperationResult retryResult = spawner.DespawnAll();
 
             Assert.IsTrue(retryResult);
+            Assert.AreEqual(SpawnOperations.SUCCESS_ALL_DESPAWNED, retryResult.resultCode);
             Assert.AreEqual(0, spawner.SpawnedEntities.Count);
-
-            Object.DestroyImmediate(spawnerObject);
-            Object.DestroyImmediate(prefabObject);
-            Object.DestroyImmediate(list);
+            Assert.AreEqual(1, spawner.DespawnedCount);
         }
 
         [Test]
-        public void TrySpawnGroup_WhenGenerationFails_RollsBackCreatedEntities()
+        public void TrySpawnSingle_UsesOverridableSpawnPosition()
         {
-            GameObject prefabObject = new("SpawnPrefab");
-            TestSpawnableEntity prefab = prefabObject.AddComponent<TestSpawnableEntity>();
-            FailingGroupSpawnList list = ScriptableObject.CreateInstance<FailingGroupSpawnList>();
-            list.Prefab = prefab;
-            list.FailAfterCount = 1;
+            TestSpawnableEntity prefab = CreatePrefab();
+            TestSpawner spawner = CreateSpawner();
+            spawner.Prefab = prefab;
 
-            GameObject spawnerObject = new("GroupSpawner");
-            TestGroupSpawner spawner = spawnerObject.AddComponent<TestGroupSpawner>();
-            SerializedObject serializedSpawner = new(spawner);
-            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
-            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+            Assert.IsTrue(spawner.TrySpawnSingle());
 
-            OperationResult result = spawner.TrySpawnGroup(2);
-
-            Assert.IsFalse(result);
-            Assert.AreEqual(0, spawner.SpawnedEntities.Count);
-
-            Object.DestroyImmediate(spawnerObject);
-            Object.DestroyImmediate(prefabObject);
-            Object.DestroyImmediate(list);
+            Component spawnedComponent = spawner.SpawnedEntities[0] as Component;
+            Assert.AreEqual(spawner.SpawnPosition, spawnedComponent.transform.position);
+            Assert.AreEqual(1, spawner.SpawnPositionCallCount);
         }
 
         [Test]
-        public void TrySpawnGeneratedEntity_WhenPrefabIsInvalid_NotifiesFailure()
+        public void TrySpawnSingle_WhenSpawnPositionGenerationFails_NotifiesFailure()
         {
-            GameObject spawnerObject = new("Spawner");
-            CallbackTestSpawner spawner = spawnerObject.AddComponent<CallbackTestSpawner>();
+            TestSpawnableEntity prefab = CreatePrefab();
+            TestSpawner spawner = CreateSpawner();
+            spawner.Prefab = prefab;
+            spawner.AllowSpawnPosition = false;
 
-            OperationResult result = spawner.TrySpawnInvalidEntity();
+            OperationResult result = spawner.TrySpawnSingle();
 
             Assert.IsFalse(result);
-            Assert.IsTrue(spawner.SpawnFailed);
-
-            Object.DestroyImmediate(spawnerObject);
+            Assert.AreEqual(
+                SpawnOperations.ERROR_SPAWN_POSITION_NOT_GENERATED, result.resultCode);
+            Assert.AreEqual(1, spawner.SpawnPositionCallCount);
+            Assert.AreEqual(1, spawner.GenerateCallCount);
+            Assert.AreEqual(1, spawner.SpawnFailedCount);
         }
 
         [Test]
-        public void TrySpawn_WithOnlyInvalidListEntries_ReturnsNotPermitted()
+        public void TrySpawnWave_ReturnsWaveResultAndTracksAllEntities()
         {
-            SpawnList list = ScriptableObject.CreateInstance<SpawnList>();
-            SerializedObject serializedList = new(list);
-            SerializedProperty entities = serializedList.FindProperty("_entities");
-            entities.arraySize = 1;
-            entities.GetArrayElementAtIndex(0).objectReferenceValue = null;
-            serializedList.ApplyModifiedPropertiesWithoutUndo();
+            TestSpawnableEntity prefab = CreatePrefab();
+            TestWaveSpawner spawner = CreateWaveSpawner();
+            spawner.Prefab = prefab;
 
-            GameObject spawnerObject = new("Spawner");
-            TestSpawner spawner = spawnerObject.AddComponent<TestSpawner>();
-            SerializedObject serializedSpawner = new(spawner);
-            serializedSpawner.FindProperty("_spawnList").objectReferenceValue = list;
-            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+            OperationResult result = spawner.TrySpawnWave(3);
 
-            OperationResult result = spawner.TrySpawn();
+            Assert.IsTrue(result);
+            Assert.AreEqual(SpawnOperations.SUCCESS_WAVE_SPAWNED, result.resultCode);
+            Assert.AreEqual(3, spawner.SpawnedEntities.Count);
+            Assert.AreEqual(3, spawner.GenerateCallCount);
+            Assert.AreEqual(1, spawner.WaveSpawnedCount);
+        }
+
+        [Test]
+        public void TrySpawnWave_WithInvalidCountFailsBeforeGeneration()
+        {
+            TestWaveSpawner spawner = CreateWaveSpawner();
+
+            OperationResult result = spawner.TrySpawnWave(0);
 
             Assert.IsFalse(result);
-            Assert.AreEqual(SpawnOperations.ERROR_SPAWN_NOT_PERMITTED, result.resultCode);
+            Assert.AreEqual(SpawnOperations.ERROR_INVALID_SPAWN_COUNT, result.resultCode);
+            Assert.AreEqual(0, spawner.GenerateCallCount);
+            Assert.AreEqual(1, spawner.WaveFailedCount);
+        }
 
-            Object.DestroyImmediate(spawnerObject);
-            Object.DestroyImmediate(list);
+        [Test]
+        public void TrySpawnWave_WhenGenerationFails_RollsBackOnlyEntitiesCreatedByThatWave()
+        {
+            TestSpawnableEntity prefab = CreatePrefab();
+            TestWaveSpawner spawner = CreateWaveSpawner();
+            spawner.Prefab = prefab;
+            Assert.IsTrue(spawner.TrySpawnSingle());
+            spawner.FailAfterGeneration = 2;
+
+            OperationResult result = spawner.TrySpawnWave(2);
+
+            Assert.IsFalse(result);
+            Assert.AreEqual(SpawnOperations.ERROR_ENTITY_NOT_GENERATED, result.resultCode);
+            Assert.AreEqual(1, spawner.SpawnedEntities.Count);
+            Assert.AreEqual(1, spawner.WaveFailedCount);
         }
     }
 }
