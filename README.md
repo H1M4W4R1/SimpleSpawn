@@ -101,3 +101,9 @@ Derive from `AutomaticDespawnControlBase` when the same validation should be att
 ## Operation results
 
 `SpawnOperations` uses system code `0x0012` and provides `Spawned`, `Despawned`, `AllDespawned`, `WaveSpawned`, configuration errors, invalid-prefab errors, invalid-count errors, and spawn-position generation errors.
+
+## Examples included
+
+- `Scene - Spawn.unity`: exposes runtime Unity UI for single spawn, batch spawn, latest despawn, and despawn-all cases.
+- `ExampleSpawnScene`: scene driver with runtime buttons and a context menu action for replaying the batch example.
+- `ExampleSingleSpawner` and `ExampleSpawnableEntity`: minimal tracked single-spawner setup.
